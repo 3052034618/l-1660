@@ -6,13 +6,17 @@ import {
   BarChart3,
   MapPin,
   FileText,
-  TrendingUp,
   ShieldCheck,
   AlertTriangle,
   ClipboardCheck,
+  TrendingUp,
 } from 'lucide-react'
 
-const CHART_COLORS = ['#00D4AA', '#1E88E5', '#F5A623', '#FF6B35', '#E63946', '#7C4DFF']
+const CHART_COLORS = {
+  sampling: '#00D4AA',
+  qualified: '#1E88E5',
+  disposal: '#F5A623',
+}
 
 export default function Statistics() {
   const { tasks, testResults, disposalOrders, alerts, samplingPoints } = useStore()
@@ -60,38 +64,65 @@ export default function Statistics() {
   const regions = useMemo(() => [...new Set(tasks.map((t) => t.region))], [tasks])
   const categories = useMemo(() => [...new Set(tasks.map((t) => t.productCategory))], [tasks])
 
-  const barData = useMemo(() => {
-    if (activeTab === 'region') {
-      return regions.map((region) => {
-        const regionTasks = tasks.filter((t) => t.region === region)
-        const done = regionTasks.filter((t) => t.status === 'completed' || t.status === 'testing').length
-        return { name: region, rate: regionTasks.length > 0 ? done / regionTasks.length : 0 }
-      })
-    }
-    return categories.map((cat) => {
-      const catTasks = tasks.filter((t) => t.productCategory === cat)
-      const done = catTasks.filter((t) => t.status === 'completed' || t.status === 'testing').length
-      return { name: cat, rate: catTasks.length > 0 ? done / catTasks.length : 0 }
+  const chartData = useMemo(() => {
+    const groups = activeTab === 'region' ? regions : categories
+    return groups.map((group) => {
+      const groupTasks = tasks.filter(
+        (t) => (activeTab === 'region' ? t.region === group : t.productCategory === group)
+      )
+      const taskIds = groupTasks.map((t) => t.id)
+      const groupResults = testResults.filter((r) => taskIds.includes(r.taskId))
+      const groupDisposals = disposalOrders.filter((d) => taskIds.includes(d.taskId))
+
+      const samplingDone = groupTasks.filter((t) => t.status === 'completed' || t.status === 'testing').length
+      const qualifiedDone = groupResults.filter((r) => r.overallResult === 'qualified').length
+      const disposalDone = groupDisposals.filter((d) => d.status === 'completed').length
+
+      return {
+        name: group,
+        samplingRate: groupTasks.length > 0 ? samplingDone / groupTasks.length : 0,
+        qualifiedRate: groupResults.length > 0 ? qualifiedDone / groupResults.length : 1,
+        disposalRate: groupDisposals.length > 0 ? disposalDone / groupDisposals.length : 1,
+        taskCount: groupTasks.length,
+        resultCount: groupResults.length,
+        disposalCount: groupDisposals.length,
+      }
     })
-  }, [activeTab, tasks, regions, categories])
+  }, [activeTab, tasks, testResults, disposalOrders, regions, categories])
 
   const barOption = {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis' as const,
-      backgroundColor: 'rgba(15, 43, 70, 0.9)',
+      backgroundColor: 'rgba(15, 43, 70, 0.95)',
       borderColor: 'rgba(0, 212, 170, 0.3)',
-      textStyle: { color: '#E8EDF2' },
-      formatter: (params: any) => {
-        const p = params[0]
-        return `${p.name}<br/>采样完成率: ${(p.value * 100).toFixed(1)}%`
+      textStyle: { color: '#E8EDF2', fontSize: 12 },
+      axisPointer: { type: 'shadow' as const },
+      formatter: (params: any[]) => {
+        const first = params[0]
+        const data = chartData.find((d) => d.name === first.name)
+        if (!data) return first.name
+        return `
+          <div style="font-weight:600;margin-bottom:6px">${first.name}</div>
+          <div style="font-size:11px;line-height:1.8">
+            采样完成率: <b style="color:${CHART_COLORS.sampling}">${(data.samplingRate * 100).toFixed(1)}%</b> (${data.taskCount}项)<br/>
+            合格率: <b style="color:${CHART_COLORS.qualified}">${(data.qualifiedRate * 100).toFixed(1)}%</b> (${data.resultCount}份)<br/>
+            问题处置率: <b style="color:${CHART_COLORS.disposal}">${(data.disposalRate * 100).toFixed(1)}%</b> (${data.disposalCount}单)
+          </div>
+        `
       },
     },
-    grid: { left: '3%', right: '4%', bottom: '3%', top: '12%', containLabel: true },
+    legend: {
+      data: ['采样完成率', '合格率', '问题处置率'],
+      textStyle: { color: '#8BA3BC', fontSize: 12 },
+      top: 0,
+      right: 0,
+    },
+    grid: { left: '3%', right: '4%', bottom: '3%', top: '18%', containLabel: true },
     xAxis: {
       type: 'category' as const,
-      data: barData.map((d) => d.name),
-      axisLabel: { color: '#8BA3BC', fontSize: 11, rotate: barData.length > 5 ? 30 : 0 },
+      data: chartData.map((d) => d.name),
+      axisLabel: { color: '#8BA3BC', fontSize: 11, rotate: chartData.length > 6 ? 30 : 0 },
       axisLine: { lineStyle: { color: 'rgba(0, 212, 170, 0.2)' } },
       axisTick: { show: false },
     },
@@ -103,17 +134,52 @@ export default function Statistics() {
     },
     series: [
       {
+        name: '采样完成率',
         type: 'bar' as const,
-        data: barData.map((d) => d.rate),
-        barWidth: '50%',
+        data: chartData.map((d) => d.samplingRate),
+        barWidth: '22%',
         itemStyle: {
           borderRadius: [4, 4, 0, 0],
           color: {
             type: 'linear' as const,
             x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: '#00D4AA' },
+              { offset: 0, color: CHART_COLORS.sampling },
               { offset: 1, color: 'rgba(0, 212, 170, 0.3)' },
+            ],
+          },
+        },
+      },
+      {
+        name: '合格率',
+        type: 'bar' as const,
+        data: chartData.map((d) => d.qualifiedRate),
+        barWidth: '22%',
+        itemStyle: {
+          borderRadius: [4, 4, 0, 0],
+          color: {
+            type: 'linear' as const,
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: CHART_COLORS.qualified },
+              { offset: 1, color: 'rgba(30, 136, 229, 0.3)' },
+            ],
+          },
+        },
+      },
+      {
+        name: '问题处置率',
+        type: 'bar' as const,
+        data: chartData.map((d) => d.disposalRate),
+        barWidth: '22%',
+        itemStyle: {
+          borderRadius: [4, 4, 0, 0],
+          color: {
+            type: 'linear' as const,
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: CHART_COLORS.disposal },
+              { offset: 1, color: 'rgba(245, 166, 35, 0.3)' },
             ],
           },
         },
@@ -156,9 +222,10 @@ export default function Statistics() {
   const months = ['1月', '2月', '3月', '4月', '5月', '6月']
   const trendData = useMemo(() => {
     const mockQualified = [0.92, 0.88, 0.91, 0.85, 0.89, qualifiedRate]
-    const mockTotal = [45, 52, 48, 55, 50, tasks.length]
-    return { qualified: mockQualified, total: mockTotal }
-  }, [qualifiedRate, tasks.length])
+    const mockSampling = [0.85, 0.88, 0.92, 0.87, 0.9, samplingRate]
+    const mockDisposal = [0.7, 0.75, 0.82, 0.78, 0.85, disposalRate]
+    return { qualified: mockQualified, sampling: mockSampling, disposal: mockDisposal }
+  }, [qualifiedRate, samplingRate, disposalRate])
 
   const lineOption = {
     backgroundColor: 'transparent',
@@ -169,7 +236,7 @@ export default function Statistics() {
       textStyle: { color: '#E8EDF2' },
     },
     legend: {
-      data: ['合格率', '任务数'],
+      data: ['采样完成率', '合格率', '问题处置率'],
       textStyle: { color: '#8BA3BC' },
       top: '2%',
     },
@@ -181,58 +248,39 @@ export default function Statistics() {
       axisLine: { lineStyle: { color: 'rgba(0, 212, 170, 0.2)' } },
       axisTick: { show: false },
     },
-    yAxis: [
-      {
-        type: 'value' as const,
-        position: 'left' as const,
-        max: 1,
-        axisLabel: { color: '#8BA3BC', formatter: (v: number) => `${(v * 100).toFixed(0)}%` },
-        splitLine: { lineStyle: { color: 'rgba(0, 212, 170, 0.08)' } },
-      },
-      {
-        type: 'value' as const,
-        position: 'right' as const,
-        axisLabel: { color: '#8BA3BC' },
-        splitLine: { show: false },
-      },
-    ],
+    yAxis: {
+      type: 'value' as const,
+      max: 1,
+      axisLabel: { color: '#8BA3BC', formatter: (v: number) => `${(v * 100).toFixed(0)}%` },
+      splitLine: { lineStyle: { color: 'rgba(0, 212, 170, 0.08)' } },
+    },
     series: [
+      {
+        name: '采样完成率',
+        type: 'line' as const,
+        smooth: true,
+        data: trendData.sampling,
+        lineStyle: { color: '#00D4AA', width: 2 },
+        itemStyle: { color: '#00D4AA' },
+        symbolSize: 6,
+      },
       {
         name: '合格率',
         type: 'line' as const,
         smooth: true,
         data: trendData.qualified,
-        lineStyle: { color: '#00D4AA', width: 2 },
-        itemStyle: { color: '#00D4AA' },
-        areaStyle: {
-          color: {
-            type: 'linear' as const,
-            x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [
-              { offset: 0, color: 'rgba(0, 212, 170, 0.3)' },
-              { offset: 1, color: 'rgba(0, 212, 170, 0.02)' },
-            ],
-          },
-        },
-      },
-      {
-        name: '任务数',
-        type: 'line' as const,
-        smooth: true,
-        yAxisIndex: 1,
-        data: trendData.total,
         lineStyle: { color: '#1E88E5', width: 2 },
         itemStyle: { color: '#1E88E5' },
-        areaStyle: {
-          color: {
-            type: 'linear' as const,
-            x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [
-              { offset: 0, color: 'rgba(30, 136, 229, 0.3)' },
-              { offset: 1, color: 'rgba(30, 136, 229, 0.02)' },
-            ],
-          },
-        },
+        symbolSize: 6,
+      },
+      {
+        name: '问题处置率',
+        type: 'line' as const,
+        smooth: true,
+        data: trendData.disposal,
+        lineStyle: { color: '#F5A623', width: 2 },
+        itemStyle: { color: '#F5A623' },
+        symbolSize: 6,
       },
     ],
   }
@@ -283,15 +331,13 @@ export default function Statistics() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-txt-primary flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-accent" />
-            采样完成率分析
+            三项指标对比分析
           </h2>
           <div className="flex items-center gap-1 p-1 rounded-lg bg-primary/60">
             <button
               onClick={() => setActiveTab('region')}
               className={`px-4 py-1.5 rounded-md text-sm transition-all ${
-                activeTab === 'region'
-                  ? 'bg-accent/20 text-accent'
-                  : 'text-txt-secondary hover:text-txt-primary'
+                activeTab === 'region' ? 'bg-accent/20 text-accent' : 'text-txt-secondary hover:text-txt-primary'
               }`}
             >
               按区域
@@ -299,27 +345,25 @@ export default function Statistics() {
             <button
               onClick={() => setActiveTab('category')}
               className={`px-4 py-1.5 rounded-md text-sm transition-all ${
-                activeTab === 'category'
-                  ? 'bg-accent/20 text-accent'
-                  : 'text-txt-secondary hover:text-txt-primary'
+                activeTab === 'category' ? 'bg-accent/20 text-accent' : 'text-txt-secondary hover:text-txt-primary'
               }`}
             >
               按产品种类
             </button>
           </div>
         </div>
-        <ReactECharts option={barOption} style={{ height: 320 }} />
+        <ReactECharts option={barOption} style={{ height: 340 }} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="glass-card p-5">
           <h2 className="text-lg font-semibold text-txt-primary mb-4">合格率分布</h2>
-          <ReactECharts option={pieOption} style={{ height: 280 }} />
+          <ReactECharts option={pieOption} style={{ height: 260 }} />
         </div>
 
         <div className="glass-card p-5">
           <h2 className="text-lg font-semibold text-txt-primary mb-4">月度趋势</h2>
-          <ReactECharts option={lineOption} style={{ height: 280 }} />
+          <ReactECharts option={lineOption} style={{ height: 260 }} />
         </div>
       </div>
     </div>

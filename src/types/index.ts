@@ -22,6 +22,8 @@ export interface InspectionTask {
   deadline: string
   testItems: string[]
   description: string
+  rejectReason?: string
+  scanConfirmedAt?: string
 }
 
 export interface SamplingRecord {

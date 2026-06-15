@@ -1,34 +1,65 @@
-import { useState } from 'react'
-import { CheckCircle2, XCircle, Check, X, AlertTriangle, FileCheck } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import {
+  CheckCircle2,
+  XCircle,
+  Check,
+  X,
+  AlertTriangle,
+  FileCheck,
+  Clock,
+  Package,
+  ListChecks,
+} from 'lucide-react'
 import { useStore } from '@/store'
 import { riskLevelBadge, taskStatusBadge } from '@/components/Badges'
+import type { InspectionTask } from '@/types'
 
 interface ValidationResult {
   label: string
+  icon: typeof Clock
   passed: boolean
   detail: string
+  key: 'sample' | 'time' | 'items'
 }
 
-function getValidationResults(task: ReturnType<typeof useStore.getState>['tasks'][0]): ValidationResult[] {
+function getValidationResults(task: InspectionTask): ValidationResult[] {
   const now = Date.now()
   const deadline = new Date(task.deadline).getTime()
   return [
     {
+      key: 'sample',
       label: '样本量校验',
+      icon: Package,
       passed: task.sampleCount >= task.requiredSampleCount,
-      detail: `${task.sampleCount}/${task.requiredSampleCount} 份`,
+      detail: `${task.sampleCount}/${task.requiredSampleCount} 份${task.sampleCount < task.requiredSampleCount ? `，缺少 ${task.requiredSampleCount - task.sampleCount} 份` : ''}`,
     },
     {
+      key: 'time',
       label: '采样时间窗口',
+      icon: Clock,
       passed: now <= deadline,
-      detail: now <= deadline ? '在截止时间内' : '已超过截止时间',
+      detail: now <= deadline ? '在截止时间内' : `已超过截止时间 ${task.deadline}`,
     },
     {
+      key: 'items',
       label: '检测项目完整性',
+      icon: ListChecks,
       passed: task.testItems.length > 0,
-      detail: `${task.testItems.length} 项检测项目`,
+      detail: task.testItems.length > 0 ? `${task.testItems.length} 项检测项目` : '检测项目为空',
     },
   ]
+}
+
+function getRejectReasons(results: ValidationResult[]): string {
+  return results
+    .filter((r) => !r.passed)
+    .map((r) => {
+      if (r.key === 'sample') return '样本量不足'
+      if (r.key === 'time') return '超出采样时间窗口'
+      if (r.key === 'items') return '检测项目不完整'
+      return r.label + '未通过'
+    })
+    .join('、')
 }
 
 export default function Review() {
@@ -38,10 +69,19 @@ export default function Review() {
   const [rejectTaskId, setRejectTaskId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
 
-  const reviewTasks = tasks.filter((t) => t.status === 'reviewing' || t.status === 'sampled')
+  const reviewTasks = useMemo(
+    () => tasks.filter((t) => t.status === 'reviewing' || t.status === 'sampled'),
+    [tasks]
+  )
 
   const handleApprove = (taskId: string) => {
     reviewTask(taskId, true)
+  }
+
+  const handleRejectOpen = (taskId: string, results: ValidationResult[]) => {
+    const reasons = getRejectReasons(results)
+    setRejectReason(reasons + '，请补采后重新提交')
+    setRejectTaskId(taskId)
   }
 
   const handleReject = (taskId: string) => {
@@ -87,10 +127,15 @@ export default function Review() {
                       <span>截止 {task.deadline}</span>
                     </div>
                   </div>
-                  {!allPassed && (
+                  {!allPassed ? (
                     <div className="flex items-center gap-1 text-alert-red text-xs">
                       <AlertTriangle className="w-3.5 h-3.5" />
-                      异常
+                      校验不通过
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-green-400 text-xs">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      校验通过
                     </div>
                   )}
                 </div>
@@ -98,20 +143,24 @@ export default function Review() {
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   {results.map((r) => (
                     <div
-                      key={r.label}
+                      key={r.key}
                       className={`glass-card p-3 bg-primary/40 ${
-                        r.passed ? 'border-green-500/20' : 'border-alert-red/20'
+                        r.passed ? 'border-green-500/20' : 'border-alert-red/30'
                       }`}
                     >
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1.5">
                         {r.passed ? (
-                          <CheckCircle2 className="w-4 h-4 text-green-400" />
+                          <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
                         ) : (
-                          <XCircle className="w-4 h-4 text-alert-red" />
+                          <XCircle className="w-4 h-4 text-alert-red flex-shrink-0" />
                         )}
                         <span className="text-xs text-txt-primary font-medium">{r.label}</span>
                       </div>
-                      <p className={`text-[11px] font-mono-num ${r.passed ? 'text-green-400/80' : 'text-alert-red/80'}`}>
+                      <p
+                        className={`text-[11px] leading-relaxed ${
+                          r.passed ? 'text-green-400/80' : 'text-alert-red/90'
+                        }`}
+                      >
                         {r.detail}
                       </p>
                     </div>
@@ -119,8 +168,8 @@ export default function Review() {
                 </div>
 
                 {isRejecting ? (
-                  <div className="glass-card p-4 bg-primary/40 border-alert-red/20">
-                    <p className="text-xs text-txt-secondary mb-2">请输入退回原因</p>
+                  <div className="glass-card p-4 bg-primary/40 border-alert-red/30 border">
+                    <p className="text-xs text-txt-secondary mb-2">请确认退回原因</p>
                     <textarea
                       value={rejectReason}
                       onChange={(e) => setRejectReason(e.target.value)}
@@ -143,7 +192,7 @@ export default function Review() {
                         disabled={!rejectReason.trim()}
                         className="px-4 py-1.5 text-xs gradient-red text-white rounded-lg disabled:opacity-40 transition-opacity"
                       >
-                        确认退回
+                        确认退回补采
                       </button>
                     </div>
                   </div>
@@ -151,18 +200,29 @@ export default function Review() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => handleApprove(task.id)}
-                      className="flex items-center gap-1.5 px-5 py-2 text-xs font-medium gradient-accent text-white rounded-lg hover:opacity-90 transition-all"
+                      disabled={!allPassed}
+                      className={`flex items-center gap-1.5 px-5 py-2 text-xs font-medium rounded-lg transition-all ${
+                        allPassed
+                          ? 'gradient-accent text-white hover:opacity-90'
+                          : 'bg-gray-500/20 text-gray-500 cursor-not-allowed'
+                      }`}
+                      title={!allPassed ? '存在不达标项，无法通过' : ''}
                     >
                       <Check className="w-3.5 h-3.5" />
                       通过
                     </button>
                     <button
-                      onClick={() => setRejectTaskId(task.id)}
+                      onClick={() => handleRejectOpen(task.id, results)}
                       className="flex items-center gap-1.5 px-5 py-2 text-xs font-medium border border-alert-red/30 text-alert-red rounded-lg hover:bg-alert-red/10 transition-all"
                     >
                       <X className="w-3.5 h-3.5" />
                       退回补采
                     </button>
+                    {!allPassed && (
+                      <span className="text-[11px] text-alert-red/70 ml-2">
+                        * 校验不达标，仅可退回补采
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

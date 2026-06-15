@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Zap, MapPin, FlaskConical, FileText, ClipboardList, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Zap, MapPin, FlaskConical, FileText, ClipboardList, ExternalLink, AlertTriangle } from 'lucide-react'
 import { useStore } from '@/store'
 import { riskLevelBadge, taskStatusBadge, alertLevelBadge } from '@/components/Badges'
-import { personnel, agencies, mockSamplingRecords } from '@/data/mockData'
+import { personnel, agencies } from '@/data/mockData'
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const tasks = useStore((s) => s.tasks)
+  const samplingRecords = useStore((s) => s.samplingRecords)
   const testResults = useStore((s) => s.testResults)
   const disposalOrders = useStore((s) => s.disposalOrders)
   const assignTask = useStore((s) => s.assignTask)
@@ -35,7 +36,7 @@ export default function TaskDetail() {
 
   const relatedResults = testResults.filter((r) => r.taskId === task.id)
   const relatedDisposals = disposalOrders.filter((d) => d.taskId === task.id)
-  const relatedSamplingRecords = mockSamplingRecords.filter((s) => s.taskId === task.id)
+  const relatedSamplingRecords = samplingRecords.filter((s) => s.taskId === task.id)
 
   const handleSmartAssign = () => {
     const randomPerson = personnel[Math.floor(Math.random() * personnel.length)]
@@ -86,6 +87,7 @@ export default function TaskDetail() {
             ['需采样数量', `${task.requiredSampleCount}`],
             ['已采样数量', `${task.sampleCount}`],
             ['检测项目', task.testItems.join('、')],
+            ['扫码确认时间', task.scanConfirmedAt || '—'],
           ].map(([label, value], i) => (
             <div key={i}>
               <span className="text-sm text-[var(--text-secondary)]">{label}</span>
@@ -97,6 +99,15 @@ export default function TaskDetail() {
           <div>
             <span className="text-sm text-[var(--text-secondary)]">任务描述</span>
             <p className="mt-0.5 text-[var(--text-primary)] text-sm">{task.description}</p>
+          </div>
+        )}
+        {task.rejectReason && (
+          <div className="p-3 rounded-lg bg-alert-red/10 border border-alert-red/30">
+            <div className="flex items-center gap-2 text-alert-red text-sm font-medium mb-1">
+              <AlertTriangle className="w-4 h-4" />
+              退回原因
+            </div>
+            <p className="text-sm text-txt-primary">{task.rejectReason}</p>
           </div>
         )}
       </div>
@@ -178,9 +189,9 @@ export default function TaskDetail() {
           <h2 className="text-lg font-medium">采样记录</h2>
         </div>
         {relatedSamplingRecords.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {relatedSamplingRecords.map((record) => (
-              <div key={record.id} className="p-4 rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] space-y-2">
+              <div key={record.id} className="p-4 rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-mono-num text-sm text-[var(--accent)]">{record.sampleCode}</span>
                   <span className="text-xs text-[var(--text-secondary)]">{record.sampledAt}</span>
@@ -188,17 +199,35 @@ export default function TaskDetail() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                   <div>
                     <span className="text-[var(--text-secondary)]">确认人：</span>
-                    <span>{record.confirmedBy}</span>
+                    <span className="text-txt-primary">{record.confirmedBy}</span>
                   </div>
                   <div>
-                    <span className="text-[var(--text-secondary)]">GPS：</span>
-                    <span className="font-mono-num text-xs">{record.gpsLocation.lat}, {record.gpsLocation.lng}</span>
+                    <span className="text-[var(--text-secondary)]">GPS定位：</span>
+                    <span className="font-mono-num text-xs text-txt-primary">
+                      {record.gpsLocation.lat.toFixed(4)}, {record.gpsLocation.lng.toFixed(4)}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-[var(--text-secondary)]">照片：</span>
-                    <span>{record.photos.length} 张</span>
+                    <span className="text-[var(--text-secondary)]">照片数量：</span>
+                    <span className="text-txt-primary">{record.photos.length} 张</span>
                   </div>
                 </div>
+                {record.photos.length > 0 && (
+                  <div className="grid grid-cols-4 gap-2 pt-2 border-t border-accent/10">
+                    {record.photos.map((photo, idx) => (
+                      <div
+                        key={idx}
+                        className="aspect-square rounded-lg overflow-hidden border border-accent/10 group cursor-pointer"
+                      >
+                        <img
+                          src={photo}
+                          alt={`采样照片${idx + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

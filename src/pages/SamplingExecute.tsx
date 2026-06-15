@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ScanLine, Camera, MapPin, ChevronRight, ChevronLeft, Check, Upload, Pencil, X, Loader2 } from 'lucide-react'
 import { useStore } from '@/store'
 import { riskLevelBadge, taskStatusBadge } from '@/components/Badges'
+import type { SamplingRecord } from '@/types'
 
 type Step = 1 | 2 | 3
 
@@ -17,6 +18,7 @@ export default function SamplingExecute() {
   const navigate = useNavigate()
   const tasks = useStore((s) => s.tasks)
   const updateTask = useStore((s) => s.updateTask)
+  const addSamplingRecord = useStore((s) => s.addSamplingRecord)
   const task = tasks.find((t) => t.id === id)
 
   const [step, setStep] = useState<Step>(1)
@@ -48,8 +50,9 @@ export default function SamplingExecute() {
     setTimeout(() => {
       setScanning(false)
       setScanConfirmed(true)
-      if (task.status === 'assigned') {
-        updateTask(task.id, { status: 'sampling' })
+      const now = new Date().toLocaleString('zh-CN')
+      if (task) {
+        updateTask(task.id, { status: 'sampling', scanConfirmedAt: now })
       }
     }, 1500)
   }
@@ -75,7 +78,19 @@ export default function SamplingExecute() {
   const handleSubmit = () => {
     setSubmitting(true)
     setTimeout(() => {
-      updateTask(task.id, { status: 'sampled', sampleCount: task.requiredSampleCount })
+      if (task) {
+        const record: SamplingRecord = {
+          id: `S${Date.now()}`,
+          taskId: task.id,
+          sampleCode: `BAR-${task.id}-${Date.now().toString().slice(-6)}`,
+          photos: photos,
+          gpsLocation: gps,
+          sampledAt: new Date().toLocaleString('zh-CN'),
+          confirmedBy: task.samplingPersonnel || '采样人员',
+        }
+        addSamplingRecord(record)
+        updateTask(task.id, { status: 'sampled', sampleCount: task.requiredSampleCount })
+      }
       setSubmitting(false)
       navigate('/sampling')
     }, 1000)
