@@ -1,11 +1,23 @@
 export type RiskLevel = 'low' | 'medium' | 'high'
-export type TaskStatus = 'pending' | 'assigned' | 'sampling' | 'sampled' | 'reviewing' | 'testing' | 'completed' | 'rejected'
+export type TaskStatus = 'pending' | 'assigned' | 'sampling' | 'sampled' | 'reviewing' | 'testing' | 'completed' | 'rejected' | 'needs_resampling'
 export type AlertLevel = 'yellow' | 'orange' | 'red'
 export type DisposalType = 'retest' | 'destroy' | 'recall'
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
 export type PlanStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected'
 export type EquipmentStatus = 'normal' | 'maintenance_due' | 'under_maintenance'
 export type OverallResult = 'qualified' | 'unqualified'
+
+export type RejectCategory = 'sample' | 'time' | 'items' | 'other'
+
+export interface ReviewHistoryEntry {
+  id: string
+  action: 'submit' | 'approve' | 'reject' | 'resample_start' | 'resample_submit'
+  timestamp: string
+  operator: string
+  comment?: string
+  rejectCategories?: RejectCategory[]
+  rejectReasons?: string[]
+}
 
 export interface InspectionTask {
   id: string
@@ -24,6 +36,8 @@ export interface InspectionTask {
   description: string
   rejectReason?: string
   scanConfirmedAt?: string
+  month?: string
+  reviewHistory?: ReviewHistoryEntry[]
 }
 
 export interface SamplingRecord {
@@ -34,6 +48,7 @@ export interface SamplingRecord {
   gpsLocation: { lat: number; lng: number }
   sampledAt: string
   confirmedBy: string
+  isResample?: boolean
 }
 
 export interface TestItem {

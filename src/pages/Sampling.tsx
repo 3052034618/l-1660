@@ -8,7 +8,7 @@ import type { TaskStatus } from '@/types'
 type FilterKey = 'assigned' | 'sampling' | 'completed'
 
 const filterOptions: { key: FilterKey; label: string; statuses: TaskStatus[] }[] = [
-  { key: 'assigned', label: '待采样', statuses: ['assigned'] },
+  { key: 'assigned', label: '待采样', statuses: ['assigned', 'needs_resampling'] },
   { key: 'sampling', label: '采样中', statuses: ['sampling'] },
   { key: 'completed', label: '已完成', statuses: ['sampled', 'reviewing', 'testing', 'completed'] },
 ]

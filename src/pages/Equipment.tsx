@@ -66,9 +66,11 @@ export default function Equipment() {
     setSelectedParts([])
   }
 
-  const handleAddPart = (part: { id: string; name: string }) => {
+  const handleAddPart = (part: { id: string; name: string; stock: number }) => {
+    if (part.stock <= 0) return
     const existing = selectedParts.find((p) => p.partId === part.id)
     if (existing) {
+      if (existing.quantity >= part.stock) return
       setSelectedParts((prev) =>
         prev.map((p) => (p.partId === part.id ? { ...p, quantity: p.quantity + 1 } : p))
       )
@@ -78,10 +80,17 @@ export default function Equipment() {
   }
 
   const handleChangeQty = (partId: string, delta: number) => {
+    const part = spareParts.find((sp) => sp.id === partId)
+    const current = selectedParts.find((p) => p.partId === partId)
+    if (!current) return
+    const newQty = current.quantity + delta
+    if (newQty < 1) {
+      setSelectedParts((prev) => prev.filter((p) => p.partId !== partId))
+      return
+    }
+    if (part && newQty > part.stock) return
     setSelectedParts((prev) =>
-      prev
-        .map((p) => (p.partId === partId ? { ...p, quantity: Math.max(1, p.quantity + delta) } : p))
-        .filter((p) => p.quantity > 0)
+      prev.map((p) => (p.partId === partId ? { ...p, quantity: newQty } : p))
     )
   }
 
@@ -90,7 +99,18 @@ export default function Equipment() {
   }
 
   const handleCompleteOrder = (orderId: string) => {
-    completeMaintenance(orderId, selectedParts)
+    for (const usage of selectedParts) {
+      const sp = spareParts.find((s) => s.id === usage.partId)
+      if (!sp || sp.stock < usage.quantity) {
+        alert(`备件 ${usage.partName} 库存不足，当前库存 ${sp?.stock ?? 0}${sp?.unit ?? ''}，需要 ${usage.quantity}${sp?.unit ?? ''}`)
+        return
+      }
+    }
+    const success = completeMaintenance(orderId, selectedParts)
+    if (!success) {
+      alert('维保完成失败，请检查备件库存')
+      return
+    }
     setCompletingOrderId(null)
     setSelectedParts([])
   }
@@ -293,49 +313,80 @@ export default function Equipment() {
                           <div className="mt-4 p-4 rounded-lg bg-primary/60 border border-accent/20 space-y-3">
                             <p className="text-sm font-medium text-txt-primary">选择消耗的备件</p>
                             <div className="flex flex-wrap gap-1.5 mb-3">
-                              {spareParts.map((sp) => (
-                                <button
-                                  key={sp.id}
-                                  onClick={() => handleAddPart({ id: sp.id, name: sp.name })}
-                                  className="px-2.5 py-1 text-[11px] bg-accent/5 text-txt-secondary border border-accent/10 rounded hover:bg-accent/10 hover:text-accent transition-colors"
-                                >
-                                  + {sp.name}
-                                </button>
-                              ))}
+                              {spareParts.map((sp) => {
+                                const isLow = sp.stock < sp.safetyStock
+                                const isOut = sp.stock <= 0
+                                return (
+                                  <button
+                                    key={sp.id}
+                                    onClick={() => handleAddPart({ id: sp.id, name: sp.name, stock: sp.stock })}
+                                    disabled={isOut}
+                                    className={`px-2.5 py-1 text-[11px] border rounded transition-colors ${
+                                      isOut
+                                        ? 'bg-gray-500/10 text-gray-500 border-gray-500/20 cursor-not-allowed'
+                                        : isLow
+                                        ? 'bg-alert-red/5 text-alert-red border-alert-red/20 hover:bg-alert-red/10'
+                                        : 'bg-accent/5 text-txt-secondary border-accent/10 hover:bg-accent/10 hover:text-accent'
+                                    }`}
+                                    title={isOut ? '库存不足' : `当前库存: ${sp.stock}${sp.unit}`}
+                                  >
+                                    + {sp.name}
+                                    <span className={`ml-1 font-mono-num ${isLow ? 'text-alert-red' : ''}`}>
+                                      ({sp.stock}{sp.unit})
+                                    </span>
+                                  </button>
+                                )
+                              })}
                             </div>
                             {selectedParts.length > 0 && (
                               <div className="space-y-2 mb-3">
-                                {selectedParts.map((p) => (
-                                  <div
-                                    key={p.partId}
-                                    className="flex items-center justify-between p-2 rounded bg-primary/40"
-                                  >
-                                    <span className="text-xs text-txt-primary">{p.partName}</span>
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => handleChangeQty(p.partId, -1)}
-                                        className="w-5 h-5 flex items-center justify-center rounded bg-accent/10 text-accent hover:bg-accent/20"
-                                      >
-                                        <Minus className="w-3 h-3" />
-                                      </button>
-                                      <span className="text-xs font-mono-num text-txt-primary w-6 text-center">
-                                        {p.quantity}
-                                      </span>
-                                      <button
-                                        onClick={() => handleChangeQty(p.partId, 1)}
-                                        className="w-5 h-5 flex items-center justify-center rounded bg-accent/10 text-accent hover:bg-accent/20"
-                                      >
-                                        <Plus className="w-3 h-3" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleRemovePart(p.partId)}
-                                        className="ml-2 w-5 h-5 flex items-center justify-center rounded text-alert-red hover:bg-alert-red/10"
-                                      >
-                                        <X className="w-3 h-3" />
-                                      </button>
+                                {selectedParts.map((p) => {
+                                  const sp = spareParts.find((s) => s.id === p.partId)
+                                  const isMax = sp && p.quantity >= sp.stock
+                                  return (
+                                    <div
+                                      key={p.partId}
+                                      className="flex items-center justify-between p-2 rounded bg-primary/40"
+                                    >
+                                      <div className="flex flex-col">
+                                        <span className="text-xs text-txt-primary">{p.partName}</span>
+                                        {sp && (
+                                          <span className={`text-[10px] font-mono-num ${sp.stock < sp.safetyStock ? 'text-alert-red' : 'text-txt-secondary'}`}>
+                                            库存: {sp.stock}{sp.unit}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          onClick={() => handleChangeQty(p.partId, -1)}
+                                          className="w-5 h-5 flex items-center justify-center rounded bg-accent/10 text-accent hover:bg-accent/20"
+                                        >
+                                          <Minus className="w-3 h-3" />
+                                        </button>
+                                        <span className="text-xs font-mono-num text-txt-primary w-6 text-center">
+                                          {p.quantity}
+                                        </span>
+                                        <button
+                                          onClick={() => handleChangeQty(p.partId, 1)}
+                                          disabled={isMax}
+                                          className={`w-5 h-5 flex items-center justify-center rounded ${
+                                            isMax
+                                              ? 'bg-gray-500/10 text-gray-500 cursor-not-allowed'
+                                              : 'bg-accent/10 text-accent hover:bg-accent/20'
+                                          }`}
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleRemovePart(p.partId)}
+                                          className="ml-2 w-5 h-5 flex items-center justify-center rounded text-alert-red hover:bg-alert-red/10"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      </div>
                                     </div>
-                                  </div>
-                                ))}
+                                  )
+                                })}
                               </div>
                             )}
                             <div className="flex justify-end gap-2">

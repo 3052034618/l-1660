@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { useStore } from '@/store'
 import { riskLevelBadge, taskStatusBadge } from '@/components/Badges'
-import type { InspectionTask } from '@/types'
+import type { InspectionTask, RejectCategory } from '@/types'
 
 interface ValidationResult {
   label: string
@@ -68,6 +68,8 @@ export default function Review() {
 
   const [rejectTaskId, setRejectTaskId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [rejectCategories, setRejectCategories] = useState<RejectCategory[]>([])
+  const [rejectReasons, setRejectReasons] = useState<string[]>([])
 
   const reviewTasks = useMemo(
     () => tasks.filter((t) => t.status === 'reviewing' || t.status === 'sampled'),
@@ -75,19 +77,36 @@ export default function Review() {
   )
 
   const handleApprove = (taskId: string) => {
-    reviewTask(taskId, true)
+    reviewTask(taskId, true, { operator: '审核员' })
   }
 
   const handleRejectOpen = (taskId: string, results: ValidationResult[]) => {
-    const reasons = getRejectReasons(results)
-    setRejectReason(reasons + '，请补采后重新提交')
+    const cats = results.filter((r) => !r.passed).map((r) => r.key)
+    const reas = results
+      .filter((r) => !r.passed)
+      .map((r) => {
+        if (r.key === 'sample') return `样本量不足：${r.detail}`
+        if (r.key === 'time') return `超出采样时间窗口：${r.detail}`
+        if (r.key === 'items') return `检测项目不完整：${r.detail}`
+        return r.detail
+      })
+    setRejectCategories(cats)
+    setRejectReasons(reas)
+    setRejectReason(reas.join('；') + '，请补采后重新提交')
     setRejectTaskId(taskId)
   }
 
   const handleReject = (taskId: string) => {
-    reviewTask(taskId, false, rejectReason)
+    reviewTask(taskId, false, {
+      comment: rejectReason,
+      categories: rejectCategories,
+      reasons: rejectReasons.length > 0 ? rejectReasons : [rejectReason],
+      operator: '审核员',
+    })
     setRejectTaskId(null)
     setRejectReason('')
+    setRejectCategories([])
+    setRejectReasons([])
   }
 
   return (

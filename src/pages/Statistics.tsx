@@ -19,16 +19,26 @@ const CHART_COLORS = {
 }
 
 export default function Statistics() {
-  const { tasks, testResults, disposalOrders, alerts, samplingPoints } = useStore()
+  const { tasks, testResults, disposalOrders, alerts, samplingPoints, currentMonth, setCurrentMonth } = useStore()
   const [activeTab, setActiveTab] = useState<'region' | 'category'>('region')
 
-  const completedTasks = tasks.filter((t) => t.status === 'completed' || t.status === 'testing').length
-  const samplingRate = tasks.length > 0 ? completedTasks / tasks.length : 0
-  const qualifiedCount = testResults.filter((r) => r.overallResult === 'qualified').length
-  const qualifiedRate = testResults.length > 0 ? qualifiedCount / testResults.length : 0
-  const completedDisposals = disposalOrders.filter((d) => d.status === 'completed').length
-  const disposalRate = disposalOrders.length > 0 ? completedDisposals / disposalOrders.length : 0
+  const filteredTasks = useMemo(() => tasks.filter((t) => t.month === currentMonth), [tasks, currentMonth])
+  const filteredTaskIds = useMemo(() => filteredTasks.map((t) => t.id), [filteredTasks])
+  const filteredResults = useMemo(() => testResults.filter((r) => filteredTaskIds.includes(r.taskId)), [testResults, filteredTaskIds])
+  const filteredDisposals = useMemo(() => disposalOrders.filter((d) => filteredTaskIds.includes(d.taskId)), [disposalOrders, filteredTaskIds])
+
+  const completedTasks = filteredTasks.filter((t) => t.status === 'completed' || t.status === 'testing').length
+  const samplingRate = filteredTasks.length > 0 ? completedTasks / filteredTasks.length : 0
+  const qualifiedCount = filteredResults.filter((r) => r.overallResult === 'qualified').length
+  const qualifiedRate = filteredResults.length > 0 ? qualifiedCount / filteredResults.length : 0
+  const completedDisposals = filteredDisposals.filter((d) => d.status === 'completed').length
+  const disposalRate = filteredDisposals.length > 0 ? completedDisposals / filteredDisposals.length : 0
   const alertCount = alerts.filter((a) => !a.isRead).length
+
+  const availableMonths = useMemo(() => {
+    const set = new Set(tasks.map((t) => t.month))
+    return Array.from(set).sort().reverse()
+  }, [tasks])
 
   const statCards = [
     {
@@ -61,18 +71,18 @@ export default function Statistics() {
     },
   ]
 
-  const regions = useMemo(() => [...new Set(tasks.map((t) => t.region))], [tasks])
-  const categories = useMemo(() => [...new Set(tasks.map((t) => t.productCategory))], [tasks])
+  const regions = useMemo(() => [...new Set(filteredTasks.map((t) => t.region))], [filteredTasks])
+  const categories = useMemo(() => [...new Set(filteredTasks.map((t) => t.productCategory))], [filteredTasks])
 
   const chartData = useMemo(() => {
     const groups = activeTab === 'region' ? regions : categories
     return groups.map((group) => {
-      const groupTasks = tasks.filter(
+      const groupTasks = filteredTasks.filter(
         (t) => (activeTab === 'region' ? t.region === group : t.productCategory === group)
       )
       const taskIds = groupTasks.map((t) => t.id)
-      const groupResults = testResults.filter((r) => taskIds.includes(r.taskId))
-      const groupDisposals = disposalOrders.filter((d) => taskIds.includes(d.taskId))
+      const groupResults = filteredResults.filter((r) => taskIds.includes(r.taskId))
+      const groupDisposals = filteredDisposals.filter((d) => taskIds.includes(d.taskId))
 
       const samplingDone = groupTasks.filter((t) => t.status === 'completed' || t.status === 'testing').length
       const qualifiedDone = groupResults.filter((r) => r.overallResult === 'qualified').length
@@ -88,7 +98,7 @@ export default function Statistics() {
         disposalCount: groupDisposals.length,
       }
     })
-  }, [activeTab, tasks, testResults, disposalOrders, regions, categories])
+  }, [activeTab, filteredTasks, filteredResults, filteredDisposals, regions, categories])
 
   const barOption = {
     backgroundColor: 'transparent',
@@ -290,6 +300,23 @@ export default function Statistics() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-txt-primary">统计分析</h1>
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-txt-secondary">统计月份：</span>
+            <select
+              value={currentMonth}
+              onChange={(e) => setCurrentMonth(e.target.value)}
+              className="px-3 py-1.5 text-sm bg-primary/60 border border-accent/10 rounded-lg text-txt-primary focus:outline-none focus:border-accent/40 font-mono-num"
+            >
+              {availableMonths.map((m) => {
+                const [y, mo] = m.split('-')
+                return (
+                  <option key={m} value={m}>
+                    {y}年{parseInt(mo)}月
+                  </option>
+                )
+              })}
+            </select>
+          </div>
           <Link
             to="/statistics/map"
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/40 hover:bg-surface-hover border border-transparent hover:border-accent/20 transition-all text-sm text-txt-secondary hover:text-accent"

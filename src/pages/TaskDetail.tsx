@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Zap, MapPin, FlaskConical, FileText, ClipboardList, ExternalLink, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Zap, MapPin, FlaskConical, FileText, ClipboardList, ExternalLink, AlertTriangle, Clock, CheckCircle2, XCircle, RefreshCw, Send } from 'lucide-react'
 import { useStore } from '@/store'
 import { riskLevelBadge, taskStatusBadge, alertLevelBadge } from '@/components/Badges'
 import { personnel, agencies } from '@/data/mockData'
+import type { ReviewHistoryEntry } from '@/types'
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>()
@@ -323,6 +324,54 @@ export default function TaskDetail() {
                 </div>
               </Link>
             ))}
+          </div>
+        </div>
+      )}
+
+      {(task.reviewHistory && task.reviewHistory.length > 0) && (
+        <div className="glass-card p-6 space-y-4">
+          <div className="flex items-center gap-2 text-[var(--accent)]">
+            <Clock size={18} />
+            <h2 className="text-lg font-medium">审核历史</h2>
+          </div>
+          <div className="relative pl-6">
+            <div className="absolute left-2.5 top-1 bottom-1 w-px bg-accent/20" />
+            {task.reviewHistory.map((entry: ReviewHistoryEntry, idx: number) => {
+              const isLast = idx === task.reviewHistory.length - 1
+              const actionInfo = {
+                submit: { label: '提交采样', icon: Send, color: 'text-accent', bg: 'bg-accent/20' },
+                approve: { label: '审核通过', icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-500/20' },
+                reject: { label: '退回补采', icon: XCircle, color: 'text-alert-red', bg: 'bg-alert-red/20' },
+                resample_start: { label: '开始补采', icon: RefreshCw, color: 'text-amber-400', bg: 'bg-amber-500/20' },
+                resample_submit: { label: '补采提交', icon: Send, color: 'text-amber-400', bg: 'bg-amber-500/20' },
+              }[entry.action] || { label: entry.action, icon: Clock, color: 'text-txt-secondary', bg: 'bg-primary/40' }
+              const Icon = actionInfo.icon
+              return (
+                <div key={entry.id} className={`relative pb-6 ${isLast ? 'pb-0' : ''}`}>
+                  <div className={`absolute -left-[18px] top-0 w-5 h-5 rounded-full ${actionInfo.bg} flex items-center justify-center`}>
+                    <Icon className={`w-3 h-3 ${actionInfo.color}`} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-medium ${actionInfo.color}`}>{actionInfo.label}</span>
+                      <span className="text-[11px] text-txt-secondary font-mono-num">{entry.timestamp}</span>
+                      <span className="text-[11px] text-txt-secondary">操作人：{entry.operator}</span>
+                    </div>
+                    {entry.comment && (
+                      <p className="text-xs text-txt-secondary">{entry.comment}</p>
+                    )}
+                    {entry.rejectReasons && entry.rejectReasons.length > 0 && (
+                      <div className="mt-1.5 p-2.5 rounded-lg bg-alert-red/10 border border-alert-red/20 space-y-1">
+                        <p className="text-[11px] text-alert-red font-medium">退回原因：</p>
+                        {entry.rejectReasons.map((r, i) => (
+                          <p key={i} className="text-[11px] text-alert-red/90 pl-2">• {r}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

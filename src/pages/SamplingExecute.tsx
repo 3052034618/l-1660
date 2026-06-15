@@ -57,6 +57,11 @@ export default function SamplingExecute() {
     }, 1500)
   }
 
+  useEffect(() => {
+    if (task && (task.status === 'assigned' || task.status === 'needs_resampling')) {
+    }
+  }, [task])
+
   const handleAddPhoto = () => {
     const idx = photos.length % PLACEHOLDER_PHOTOS.length
     setPhotos((prev) => [...prev, PLACEHOLDER_PHOTOS[idx]])
@@ -79,6 +84,7 @@ export default function SamplingExecute() {
     setSubmitting(true)
     setTimeout(() => {
       if (task) {
+        const isResample = task.status === 'needs_resampling'
         const record: SamplingRecord = {
           id: `S${Date.now()}`,
           taskId: task.id,
@@ -87,9 +93,9 @@ export default function SamplingExecute() {
           gpsLocation: gps,
           sampledAt: new Date().toLocaleString('zh-CN'),
           confirmedBy: task.samplingPersonnel || '采样人员',
+          isResample,
         }
-        addSamplingRecord(record)
-        updateTask(task.id, { status: 'sampled', sampleCount: task.requiredSampleCount })
+        addSamplingRecord(record, isResample)
       }
       setSubmitting(false)
       navigate('/sampling')

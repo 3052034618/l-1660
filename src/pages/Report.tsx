@@ -6,22 +6,33 @@ import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 
 export default function Report() {
-  const { tasks, testResults, disposalOrders, samplingPoints } = useStore()
+  const { tasks, testResults, disposalOrders, samplingPoints, currentMonth, setCurrentMonth } = useStore()
   const reportRef = useRef<HTMLDivElement>(null)
   const [isExporting, setIsExporting] = useState(false)
 
-  const currentMonth = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })
+  const [year, month] = currentMonth.split('-')
+  const currentMonthLabel = `${year}年${parseInt(month)}月`
 
-  const completedTasks = tasks.filter((t) => t.status === 'completed' || t.status === 'testing').length
-  const samplingRate = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0
-  const qualifiedCount = testResults.filter((r) => r.overallResult === 'qualified').length
-  const qualifiedRate = testResults.length > 0 ? (qualifiedCount / testResults.length) * 100 : 0
-  const completedDisposals = disposalOrders.filter((d) => d.status === 'completed').length
-  const disposalRate = disposalOrders.length > 0 ? (completedDisposals / disposalOrders.length) * 100 : 0
-  const unqualifiedResults = testResults.filter((r) => r.overallResult === 'unqualified')
+  const filteredTasks = useMemo(() => tasks.filter((t) => t.month === currentMonth), [tasks, currentMonth])
+  const filteredTaskIds = useMemo(() => filteredTasks.map((t) => t.id), [filteredTasks])
+  const filteredResults = useMemo(() => testResults.filter((r) => filteredTaskIds.includes(r.taskId)), [testResults, filteredTaskIds])
+  const filteredDisposals = useMemo(() => disposalOrders.filter((d) => filteredTaskIds.includes(d.taskId)), [disposalOrders, filteredTaskIds])
 
-  const regions = useMemo(() => [...new Set(tasks.map((t) => t.region))], [tasks])
-  const categories = useMemo(() => [...new Set(tasks.map((t) => t.productCategory))], [tasks])
+  const completedTasks = filteredTasks.filter((t) => t.status === 'completed' || t.status === 'testing').length
+  const samplingRate = filteredTasks.length > 0 ? (completedTasks / filteredTasks.length) * 100 : 0
+  const qualifiedCount = filteredResults.filter((r) => r.overallResult === 'qualified').length
+  const qualifiedRate = filteredResults.length > 0 ? (qualifiedCount / filteredResults.length) * 100 : 0
+  const completedDisposals = filteredDisposals.filter((d) => d.status === 'completed').length
+  const disposalRate = filteredDisposals.length > 0 ? (completedDisposals / filteredDisposals.length) * 100 : 0
+  const unqualifiedResults = filteredResults.filter((r) => r.overallResult === 'unqualified')
+
+  const availableMonths = useMemo(() => {
+    const set = new Set(tasks.map((t) => t.month))
+    return Array.from(set).sort().reverse()
+  }, [tasks])
+
+  const regions = useMemo(() => [...new Set(filteredTasks.map((t) => t.region))], [filteredTasks])
+  const categories = useMemo(() => [...new Set(filteredTasks.map((t) => t.productCategory))], [filteredTasks])
 
   const regionStats = useMemo(() => {
     return regions.map((region) => {
@@ -42,14 +53,14 @@ export default function Report() {
         disposalRate: regionDisposals.length > 0 ? (dCount / regionDisposals.length) * 100 : 100,
       }
     })
-  }, [regions, tasks, testResults, disposalOrders])
+  }, [regions, filteredTasks, filteredResults, filteredDisposals])
 
   const categoryStats = useMemo(() => {
     return categories.map((cat) => {
-      const catTasks = tasks.filter((t) => t.productCategory === cat)
+      const catTasks = filteredTasks.filter((t) => t.productCategory === cat)
       const catTaskIds = catTasks.map((t) => t.id)
-      const catResults = testResults.filter((r) => catTaskIds.includes(r.taskId))
-      const catDisposals = disposalOrders.filter((d) => catTaskIds.includes(d.taskId))
+      const catResults = filteredResults.filter((r) => catTaskIds.includes(r.taskId))
+      const catDisposals = filteredDisposals.filter((d) => catTaskIds.includes(d.taskId))
       const qCount = catResults.filter((r) => r.overallResult === 'qualified').length
       const dCount = catDisposals.filter((d) => d.status === 'completed').length
       const sCount = catTasks.filter((t) => t.status === 'completed' || t.status === 'testing').length
@@ -63,7 +74,7 @@ export default function Report() {
         disposalRate: catDisposals.length > 0 ? (dCount / catDisposals.length) * 100 : 100,
       }
     })
-  }, [categories, tasks, testResults, disposalOrders])
+  }, [categories, filteredTasks, filteredResults, filteredDisposals])
 
   const regionBarOption = {
     backgroundColor: 'transparent',
@@ -237,29 +248,48 @@ export default function Report() {
     <div className="space-y-6">
       <div className="flex items-center justify-between print:hidden">
         <h1 className="text-2xl font-bold text-txt-primary">分析报告</h1>
-        <button
-          onClick={handleExportPDF}
-          disabled={isExporting}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg gradient-accent text-white text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          {isExporting ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              导出中...
-            </>
-          ) : (
-            <>
-              <Download className="w-4 h-4" />
-              导出PDF
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-txt-secondary">报告月份：</span>
+            <select
+              value={currentMonth}
+              onChange={(e) => setCurrentMonth(e.target.value)}
+              className="px-3 py-1.5 text-sm bg-primary/60 border border-accent/10 rounded-lg text-txt-primary focus:outline-none focus:border-accent/40 font-mono-num"
+            >
+              {availableMonths.map((m) => {
+                const [y, mo] = m.split('-')
+                return (
+                  <option key={m} value={m}>
+                    {y}年{parseInt(mo)}月
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+          <button
+            onClick={handleExportPDF}
+            disabled={isExporting}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg gradient-accent text-white text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {isExporting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                导出中...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                导出PDF
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       <div ref={reportRef} className="glass-card p-8 max-w-4xl mx-auto print-page">
         <div className="text-center mb-8 pb-6 border-b border-accent/20">
           <h2 className="text-2xl font-bold text-txt-primary mb-2">食品安全抽检月度分析报告</h2>
-          <p className="text-txt-secondary">{currentMonth}</p>
+          <p className="text-txt-secondary">{currentMonthLabel}</p>
         </div>
 
         <div className="space-y-8">
@@ -281,18 +311,18 @@ export default function Report() {
             </div>
             <div className="text-sm text-txt-secondary leading-relaxed space-y-2">
               <p>
-                {currentMonth}，本市共安排抽检任务 <span className="text-txt-primary font-mono-num">{tasks.length}</span> 项，
+                {currentMonthLabel}，本市共安排抽检任务 <span className="text-txt-primary font-mono-num">{filteredTasks.length}</span> 项，
                 已完成采样及检测 <span className="text-txt-primary font-mono-num">{completedTasks}</span> 项，
                 采样完成率为 <span className="text-txt-primary font-mono-num">{samplingRate.toFixed(1)}%</span>。
               </p>
               <p>
-                共出具检测报告 <span className="text-txt-primary font-mono-num">{testResults.length}</span> 份，
+                共出具检测报告 <span className="text-txt-primary font-mono-num">{filteredResults.length}</span> 份，
                 其中合格 <span className="text-txt-primary font-mono-num">{qualifiedCount}</span> 份，
-                不合格 <span className="text-txt-primary font-mono-num">{testResults.length - qualifiedCount}</span> 份，
+                不合格 <span className="text-txt-primary font-mono-num">{filteredResults.length - qualifiedCount}</span> 份，
                 总体合格率为 <span className="text-txt-primary font-mono-num">{qualifiedRate.toFixed(1)}%</span>。
               </p>
               <p>
-                不合格产品涉及处置订单 <span className="text-txt-primary font-mono-num">{disposalOrders.length}</span> 份，
+                不合格产品涉及处置订单 <span className="text-txt-primary font-mono-num">{filteredDisposals.length}</span> 份，
                 已完成处置 <span className="text-txt-primary font-mono-num">{completedDisposals}</span> 份，
                 问题处置率为 <span className="text-txt-primary font-mono-num">{disposalRate.toFixed(1)}%</span>。
               </p>

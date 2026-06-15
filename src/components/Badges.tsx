@@ -20,6 +20,7 @@ export function taskStatusBadge(status: TaskStatus) {
     testing: { text: '检测中', cls: 'bg-purple-500/20 text-purple-400' },
     completed: { text: '已完成', cls: 'bg-green-500/20 text-green-400' },
     rejected: { text: '已退回', cls: 'bg-alert-red/20 text-alert-red' },
+    needs_resampling: { text: '待补采', cls: 'bg-amber-500/20 text-amber-400' },
   }
   const item = map[status]
   return <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${item.cls}`}>{item.text}</span>
