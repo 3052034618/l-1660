@@ -90,6 +90,10 @@ export interface DisposalOrder {
   status: 'pending' | 'approved' | 'rejected' | 'completed'
   approvalChain: ApprovalNode[]
   createdAt: string
+  testItems?: string[]
+  exceedMultiple?: number
+  suggestedAction?: string
+  relatedResultId?: string
 }
 
 export interface DailyTask {
@@ -141,6 +145,21 @@ export interface SparePart {
   safetyStock: number
   unit: string
   category: string
+}
+
+export type SparePartTransactionType = 'use' | 'restock' | 'alert_resolve'
+
+export interface SparePartTransaction {
+  id: string
+  partId: string
+  partName: string
+  type: SparePartTransactionType
+  quantity: number
+  balanceAfter: number
+  relatedOrderId?: string
+  operator: string
+  remark?: string
+  createdAt: string
 }
 
 export interface SparePartUsage {

@@ -7,6 +7,7 @@ const navItems = [
   { path: '/tasks', icon: ClipboardList, label: '检测任务' },
   { path: '/sampling', icon: MapPin, label: '采样管理' },
   { path: '/review', icon: CheckSquare, label: '任务审核' },
+  { path: '/testing', icon: FlaskConical, label: '检测管理' },
   { path: '/results', icon: FlaskConical, label: '检测结果' },
   { path: '/disposal', icon: Gavel, label: '处置审批' },
   { path: '/plan', icon: CalendarClock, label: '月度计划' },

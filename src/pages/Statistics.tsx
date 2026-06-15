@@ -223,7 +223,7 @@ export default function Statistics() {
         },
         data: [
           { value: qualifiedCount, name: '合格', itemStyle: { color: '#00D4AA' } },
-          { value: testResults.length - qualifiedCount, name: '不合格', itemStyle: { color: '#E63946' } },
+          { value: filteredResults.length - qualifiedCount, name: '不合格', itemStyle: { color: '#E63946' } },
         ],
       },
     ],

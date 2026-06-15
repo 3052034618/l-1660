@@ -36,10 +36,10 @@ export default function Report() {
 
   const regionStats = useMemo(() => {
     return regions.map((region) => {
-      const regionTasks = tasks.filter((t) => t.region === region)
+      const regionTasks = filteredTasks.filter((t) => t.region === region)
       const regionTaskIds = regionTasks.map((t) => t.id)
-      const regionResults = testResults.filter((r) => regionTaskIds.includes(r.taskId))
-      const regionDisposals = disposalOrders.filter((d) => regionTaskIds.includes(d.taskId))
+      const regionResults = filteredResults.filter((r) => regionTaskIds.includes(r.taskId))
+      const regionDisposals = filteredDisposals.filter((d) => regionTaskIds.includes(d.taskId))
       const qCount = regionResults.filter((r) => r.overallResult === 'qualified').length
       const dCount = regionDisposals.filter((d) => d.status === 'completed').length
       const sCount = regionTasks.filter((t) => t.status === 'completed' || t.status === 'testing').length
@@ -75,6 +75,38 @@ export default function Report() {
       }
     })
   }, [categories, filteredTasks, filteredResults, filteredDisposals])
+
+  const pieOption = {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item' as const,
+      backgroundColor: 'rgba(15, 43, 70, 0.9)',
+      borderColor: 'rgba(0, 212, 170, 0.3)',
+      textStyle: { color: '#E8EDF2' },
+    },
+    legend: {
+      orient: 'vertical' as const,
+      right: '5%',
+      top: 'center',
+      textStyle: { color: '#8BA3BC' },
+    },
+    series: [
+      {
+        type: 'pie' as const,
+        radius: ['45%', '70%'],
+        center: ['35%', '50%'],
+        avoidLabelOverlap: false,
+        label: { show: false },
+        emphasis: {
+          label: { show: true, fontSize: 14, fontWeight: 'bold', color: '#E8EDF2' },
+        },
+        data: [
+          { value: qualifiedCount, name: '合格', itemStyle: { color: '#00D4AA' } },
+          { value: filteredResults.length - qualifiedCount, name: '不合格', itemStyle: { color: '#E63946' } },
+        ],
+      },
+    ],
+  }
 
   const regionBarOption = {
     backgroundColor: 'transparent',
@@ -309,6 +341,11 @@ export default function Report() {
                 <p className="font-mono-num text-2xl font-medium text-amber-400">{disposalRate.toFixed(1)}%</p>
               </div>
             </div>
+            {filteredResults.length > 0 && (
+              <div className="mb-4">
+                <ReactECharts option={pieOption} style={{ height: 220 }} />
+              </div>
+            )}
             <div className="text-sm text-txt-secondary leading-relaxed space-y-2">
               <p>
                 {currentMonthLabel}，本市共安排抽检任务 <span className="text-txt-primary font-mono-num">{filteredTasks.length}</span> 项，
@@ -397,9 +434,9 @@ export default function Report() {
                   个，建议加强重点区域监管力度。
                 </p>
               )}
-              {disposalOrders.filter((d) => d.status === 'pending').length > 0 && (
+              {filteredDisposals.filter((d) => d.status === 'pending').length > 0 && (
                 <p>
-                  仍有 <span className="text-txt-primary font-mono-num">{disposalOrders.filter((d) => d.status === 'pending').length}</span> 份
+                  仍有 <span className="text-txt-primary font-mono-num">{filteredDisposals.filter((d) => d.status === 'pending').length}</span> 份
                   处置订单待审批，建议加快处置流程。
                 </p>
               )}

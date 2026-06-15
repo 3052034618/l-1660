@@ -194,7 +194,14 @@ export default function TaskDetail() {
             {relatedSamplingRecords.map((record) => (
               <div key={record.id} className="p-4 rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono-num text-sm text-[var(--accent)]">{record.sampleCode}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono-num text-sm text-[var(--accent)]">{record.sampleCode}</span>
+                    {record.isResample ? (
+                      <span className="px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-400 font-medium">补采</span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 text-[10px] rounded bg-accent/20 text-accent font-medium">首次采样</span>
+                    )}
+                  </div>
                   <span className="text-xs text-[var(--text-secondary)]">{record.sampledAt}</span>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">

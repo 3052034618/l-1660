@@ -19,6 +19,7 @@ export default function SamplingExecute() {
   const tasks = useStore((s) => s.tasks)
   const updateTask = useStore((s) => s.updateTask)
   const addSamplingRecord = useStore((s) => s.addSamplingRecord)
+  const addReviewHistoryEntry = useStore((s) => s.addReviewHistoryEntry)
   const task = tasks.find((t) => t.id === id)
 
   const [step, setStep] = useState<Step>(1)
@@ -52,6 +53,13 @@ export default function SamplingExecute() {
       setScanConfirmed(true)
       const now = new Date().toLocaleString('zh-CN')
       if (task) {
+        if (task.status === 'needs_resampling') {
+          addReviewHistoryEntry(task.id, {
+            action: 'resample_start',
+            operator: task.samplingPersonnel || '采样人员',
+            comment: '开始补采',
+          })
+        }
         updateTask(task.id, { status: 'sampling', scanConfirmedAt: now })
       }
     }, 1500)

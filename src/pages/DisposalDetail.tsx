@@ -94,6 +94,34 @@ export default function DisposalDetail() {
           <p className="text-xs text-txt-secondary mb-1">处置原因</p>
           <p className="text-sm text-txt-primary">{order.reason}</p>
         </div>
+        {(order.testItems || order.exceedMultiple || order.suggestedAction) && (
+          <div className="mt-4 pt-4 border-t border-accent/10 space-y-3">
+            {order.testItems && order.testItems.length > 0 && (
+              <div>
+                <p className="text-xs text-txt-secondary mb-1">超标检测项目</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {order.testItems.map((item) => (
+                    <span key={item} className="px-2 py-0.5 text-[11px] rounded bg-alert-red/10 text-alert-red border border-alert-red/20">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {order.exceedMultiple !== undefined && (
+              <div>
+                <p className="text-xs text-txt-secondary mb-1">最高超标倍数</p>
+                <p className="text-sm text-alert-red font-mono-num font-medium">{order.exceedMultiple}倍</p>
+              </div>
+            )}
+            {order.suggestedAction && (
+              <div>
+                <p className="text-xs text-txt-secondary mb-1">建议处理方式</p>
+                <p className="text-sm text-txt-primary">{order.suggestedAction}</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="glass-card p-5">

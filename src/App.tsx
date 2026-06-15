@@ -9,6 +9,8 @@ import SamplingExecute from '@/pages/SamplingExecute'
 import Review from '@/pages/Review'
 import Results from '@/pages/Results'
 import ResultDetail from '@/pages/ResultDetail'
+import Testing from '@/pages/Testing'
+import TestingExecute from '@/pages/TestingExecute'
 import Disposal from '@/pages/Disposal'
 import DisposalDetail from '@/pages/DisposalDetail'
 import Plan from '@/pages/Plan'
@@ -32,6 +34,8 @@ export default function App() {
           <Route path="/review" element={<Review />} />
           <Route path="/results" element={<Results />} />
           <Route path="/results/:id" element={<ResultDetail />} />
+          <Route path="/testing" element={<Testing />} />
+          <Route path="/testing/:id" element={<TestingExecute />} />
           <Route path="/disposal" element={<Disposal />} />
           <Route path="/disposal/:id" element={<DisposalDetail />} />
           <Route path="/plan" element={<Plan />} />

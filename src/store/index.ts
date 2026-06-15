@@ -8,10 +8,13 @@ import type {
   Equipment,
   MaintenanceOrder,
   SparePart,
+  SparePartTransaction,
   Alert,
   SamplingPoint,
   RejectCategory,
   ReviewHistoryEntry,
+  OverallResult,
+  AlertLevel,
 } from '@/types'
 import {
   mockTasks,
@@ -38,12 +41,14 @@ interface PersistedState {
   equipment: Equipment[]
   maintenanceOrders: MaintenanceOrder[]
   spareParts: SparePart[]
+  sparePartTransactions: SparePartTransaction[]
   alerts: Alert[]
   samplingPoints: SamplingPoint[]
   currentMonth: string
   alertIdSeq: number
   maintenanceIdSeq: number
   reviewHistoryIdSeq: number
+  transactionIdSeq: number
 }
 
 function getDefaultMonth(): string {
@@ -79,9 +84,14 @@ interface AppState {
   equipment: Equipment[]
   maintenanceOrders: MaintenanceOrder[]
   spareParts: SparePart[]
+  sparePartTransactions: SparePartTransaction[]
   alerts: Alert[]
   samplingPoints: SamplingPoint[]
   currentMonth: string
+  alertIdSeq: number
+  maintenanceIdSeq: number
+  reviewHistoryIdSeq: number
+  transactionIdSeq: number
 
   setCurrentMonth: (month: string) => void
 
@@ -89,6 +99,11 @@ interface AppState {
   updateTask: (id: string, updates: Partial<InspectionTask>) => void
   assignTask: (id: string, personnel: string, agency: string) => void
   addSamplingRecord: (record: SamplingRecord, isResample?: boolean) => void
+  addReviewHistoryEntry: (
+    taskId: string,
+    entry: Omit<ReviewHistoryEntry, 'id' | 'timestamp'>
+  ) => void
+  addTestResult: (result: Omit<TestResult, 'id' | 'testedAt'>) => void
   reviewTask: (
     taskId: string,
     passed: boolean,
@@ -111,6 +126,8 @@ interface AppState {
   markAlertRead: (id: string) => void
   markAllAlertsRead: () => void
   useSparePart: (partId: string, quantity: number) => boolean
+  restockSparePart: (partId: string, quantity: number, operator?: string, remark?: string) => void
+  addSparePartTransaction: (transaction: Omit<SparePartTransaction, 'id' | 'createdAt'>) => void
   addAlert: (alert: Omit<Alert, 'id' | 'createdAt' | 'isRead'>) => void
   checkStockAndWarn: () => void
   checkEquipmentMaintenance: () => void
@@ -120,6 +137,7 @@ interface AppState {
 let alertIdSeq = 100
 let maintenanceIdSeq = 100
 let reviewHistoryIdSeq = 1000
+let transactionIdSeq = 100
 
 function enrichTasks(tasks: typeof mockTasks): InspectionTask[] {
   const defaultMonth = getDefaultMonth()
@@ -135,6 +153,7 @@ if (persisted) {
   alertIdSeq = persisted.alertIdSeq ?? 100
   maintenanceIdSeq = persisted.maintenanceIdSeq ?? 100
   reviewHistoryIdSeq = persisted.reviewHistoryIdSeq ?? 1000
+  transactionIdSeq = persisted.transactionIdSeq ?? 100
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -146,9 +165,14 @@ export const useStore = create<AppState>((set, get) => ({
   equipment: persisted?.equipment ?? mockEquipment,
   maintenanceOrders: persisted?.maintenanceOrders ?? mockMaintenanceOrders,
   spareParts: persisted?.spareParts ?? mockSpareParts,
+  sparePartTransactions: persisted?.sparePartTransactions ?? [],
   alerts: persisted?.alerts ?? mockAlerts,
   samplingPoints: persisted?.samplingPoints ?? mockSamplingPoints,
   currentMonth: persisted?.currentMonth ?? getDefaultMonth(),
+  alertIdSeq: persisted?.alertIdSeq ?? alertIdSeq,
+  maintenanceIdSeq: persisted?.maintenanceIdSeq ?? maintenanceIdSeq,
+  reviewHistoryIdSeq: persisted?.reviewHistoryIdSeq ?? reviewHistoryIdSeq,
+  transactionIdSeq: persisted?.transactionIdSeq ?? transactionIdSeq,
 
   setCurrentMonth: (month) => {
     set({ currentMonth: month })
@@ -160,12 +184,14 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: get().maintenanceOrders,
       spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: get().alerts,
       samplingPoints: get().samplingPoints,
       currentMonth: month,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
     })
   },
 
@@ -185,12 +211,14 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: get().maintenanceOrders,
       spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: get().alerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
     })
   },
 
@@ -205,12 +233,14 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: get().maintenanceOrders,
       spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: get().alerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
     })
   },
 
@@ -229,12 +259,14 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: get().maintenanceOrders,
       spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: get().alerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
     })
   },
 
@@ -267,12 +299,48 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: get().maintenanceOrders,
       spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: get().alerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
+    })
+  },
+
+  addReviewHistoryEntry: (taskId, entry) => {
+    const state = get()
+    const newTasks = state.tasks.map((t) => {
+      if (t.id !== taskId) return t
+      const historyEntry: ReviewHistoryEntry = {
+        ...entry,
+        id: `RH${++reviewHistoryIdSeq}`,
+        timestamp: new Date().toLocaleString('zh-CN'),
+      }
+      return {
+        ...t,
+        reviewHistory: [...(t.reviewHistory || []), historyEntry],
+      }
+    })
+    set({ tasks: newTasks })
+    persistState({
+      tasks: newTasks,
+      samplingRecords: get().samplingRecords,
+      testResults: get().testResults,
+      disposalOrders: get().disposalOrders,
+      equipment: get().equipment,
+      maintenanceOrders: get().maintenanceOrders,
+      spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
+      alerts: get().alerts,
+      samplingPoints: get().samplingPoints,
+      currentMonth: get().currentMonth,
+      alertIdSeq,
+      maintenanceIdSeq,
+      reviewHistoryIdSeq,
+      transactionIdSeq,
     })
   },
 
@@ -314,12 +382,148 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: get().maintenanceOrders,
       spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: get().alerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
+    })
+  },
+
+  addTestResult: (resultInput) => {
+    const state = get()
+    const task = state.tasks.find((t) => t.id === resultInput.taskId)
+    if (!task) return
+
+    const items = resultInput.items.map((item) => ({
+      ...item,
+      isExceeded: item.value > item.standard,
+      exceedMultiple:
+        item.value > item.standard
+          ? parseFloat((item.value / item.standard).toFixed(1))
+          : undefined,
+    }))
+
+    const hasExceeded = items.some((i) => i.isExceeded)
+    const overallResult: OverallResult = hasExceeded ? 'unqualified' : 'qualified'
+    const maxExceedMultiple = hasExceeded
+      ? Math.max(...items.filter((i) => i.exceedMultiple).map((i) => i.exceedMultiple!))
+      : 0
+
+    let alertLevel: AlertLevel | undefined
+    if (hasExceeded) {
+      if (maxExceedMultiple >= 2) alertLevel = 'red'
+      else if (maxExceedMultiple >= 1.2) alertLevel = 'orange'
+      else alertLevel = 'yellow'
+    }
+
+    const newResult: TestResult = {
+      ...resultInput,
+      id: `R${Date.now()}`,
+      items,
+      overallResult,
+      alertLevel,
+      testedAt: new Date().toLocaleString('zh-CN'),
+    }
+
+    const newTestResults = [...state.testResults, newResult]
+
+    let newAlerts = state.alerts
+    let newDisposalOrders = state.disposalOrders
+    if (hasExceeded && alertLevel) {
+      const exceededItems = items.filter((i) => i.isExceeded)
+      const exceedItemNames = exceededItems.map((i) => i.name)
+      const exceedDescs = exceededItems
+        .map((i) => `${i.name}超标${i.exceedMultiple}倍`)
+        .join('、')
+
+      newAlerts = [
+        {
+          id: `AL${++alertIdSeq}`,
+          type: 'exceedance',
+          level: alertLevel,
+          title: `${task.productName}检测超标`,
+          message: `${task.productName}检出不合格：${exceedDescs}`,
+          relatedId: newResult.id,
+          createdAt: new Date().toLocaleString('zh-CN'),
+          isRead: false,
+        },
+        ...newAlerts,
+      ]
+
+      const suggestionMap = {
+        yellow: { type: 'retest' as const, action: '建议安排复检，确认超标情况' },
+        orange: { type: 'recall' as const, action: '建议启动产品召回程序，排查同批次产品' },
+        red: { type: 'destroy' as const, action: '建议立即下架销毁涉事产品，启动召回程序' },
+      }
+      const suggestion = suggestionMap[alertLevel]
+
+      const maxAmount = task.requiredSampleCount * 5000
+      const disposal: DisposalOrder = {
+        id: `D${Date.now()}`,
+        taskId: task.id,
+        productName: task.productName,
+        type: suggestion.type,
+        riskLevel: task.riskLevel,
+        amount: maxAmount,
+        reason: exceedDescs,
+        status: 'pending',
+        approvalChain: [
+          {
+            level: 1,
+            approver: '刘科长',
+            approverRole: '科室负责人',
+            status: 'pending',
+          },
+        ],
+        createdAt: new Date().toLocaleString('zh-CN'),
+        testItems: exceedItemNames,
+        exceedMultiple: maxExceedMultiple,
+        suggestedAction: suggestion.action,
+        relatedResultId: newResult.id,
+      }
+      if (task.riskLevel === 'high' || maxExceedMultiple >= 1.5) {
+        disposal.approvalChain.push(
+          { level: 2, approver: '王处长', approverRole: '部门负责人', status: 'pending' }
+        )
+      }
+      if (maxExceedMultiple >= 2) {
+        disposal.approvalChain.push(
+          { level: 3, approver: '陈局长', approverRole: '局领导', status: 'pending' }
+        )
+      }
+      newDisposalOrders = [...newDisposalOrders, disposal]
+    }
+
+    const newTasks = state.tasks.map((t) =>
+      t.id === task.id ? { ...t, status: 'completed' as const } : t
+    )
+
+    set({
+      testResults: newTestResults,
+      tasks: newTasks,
+      alerts: newAlerts,
+      disposalOrders: newDisposalOrders,
+    })
+    persistState({
+      tasks: newTasks,
+      samplingRecords: get().samplingRecords,
+      testResults: newTestResults,
+      disposalOrders: newDisposalOrders,
+      equipment: get().equipment,
+      maintenanceOrders: get().maintenanceOrders,
+      spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
+      alerts: newAlerts,
+      samplingPoints: get().samplingPoints,
+      currentMonth: get().currentMonth,
+      alertIdSeq,
+      maintenanceIdSeq,
+      reviewHistoryIdSeq,
+      transactionIdSeq,
     })
   },
 
@@ -343,12 +547,14 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: get().maintenanceOrders,
       spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: get().alerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
     })
   },
 
@@ -371,12 +577,14 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: get().maintenanceOrders,
       spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: get().alerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
     })
   },
 
@@ -406,12 +614,14 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: newOrders,
       spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: get().alerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
     })
   },
 
@@ -434,6 +644,20 @@ export const useStore = create<AppState>((set, get) => ({
       newSpareParts = newSpareParts.map((sp) =>
         sp.id === usage.partId ? { ...sp, stock: sp.stock - usage.quantity } : sp
       )
+    })
+
+    partsUsed.forEach((usage) => {
+      const sp = newSpareParts.find((s) => s.id === usage.partId)!
+      get().addSparePartTransaction({
+        partId: usage.partId,
+        partName: usage.partName,
+        type: 'use',
+        quantity: usage.quantity,
+        balanceAfter: sp.stock,
+        relatedOrderId: orderId,
+        operator: '维保人员',
+        remark: `维保工单消耗，关联工单 ${orderId}`,
+      })
     })
 
     newSpareParts.forEach((sp) => {
@@ -495,12 +719,14 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: newEquipment,
       maintenanceOrders: newMaintenanceOrders,
       spareParts: newSpareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: newAlerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
     })
     return true
   },
@@ -516,12 +742,14 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: get().maintenanceOrders,
       spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: newAlerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
     })
   },
 
@@ -536,12 +764,14 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: get().maintenanceOrders,
       spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: newAlerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
     })
   },
 
@@ -561,14 +791,104 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: get().maintenanceOrders,
       spareParts: newSpareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: get().alerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
     })
     return true
+  },
+
+  addSparePartTransaction: (transaction) => {
+    const state = get()
+    const newTransaction: SparePartTransaction = {
+      ...transaction,
+      id: `TX${++transactionIdSeq}`,
+      createdAt: new Date().toLocaleString('zh-CN'),
+    }
+    const newTransactions = [...state.sparePartTransactions, newTransaction]
+    set({ sparePartTransactions: newTransactions })
+    persistState({
+      tasks: get().tasks,
+      samplingRecords: get().samplingRecords,
+      testResults: get().testResults,
+      disposalOrders: get().disposalOrders,
+      equipment: get().equipment,
+      maintenanceOrders: get().maintenanceOrders,
+      spareParts: get().spareParts,
+      sparePartTransactions: newTransactions,
+      alerts: get().alerts,
+      samplingPoints: get().samplingPoints,
+      currentMonth: get().currentMonth,
+      alertIdSeq,
+      maintenanceIdSeq,
+      reviewHistoryIdSeq,
+      transactionIdSeq,
+    })
+  },
+
+  restockSparePart: (partId, quantity, operator = '管理员', remark) => {
+    const state = get()
+    const sp = state.spareParts.find((s) => s.id === partId)
+    if (!sp) return
+
+    const newSpareParts = state.spareParts.map((s) =>
+      s.id === partId ? { ...s, stock: s.stock + quantity } : s
+    )
+    const newBalance = sp.stock + quantity
+
+    set({ spareParts: newSpareParts })
+    get().addSparePartTransaction({
+      partId,
+      partName: sp.name,
+      type: 'restock',
+      quantity,
+      balanceAfter: newBalance,
+      operator,
+      remark: remark || '手动补货',
+    })
+
+    let newAlerts = state.alerts
+    if (newBalance >= sp.safetyStock) {
+      newAlerts = state.alerts.map((a) =>
+        a.type === 'stock' && a.relatedId === partId && !a.isRead
+          ? { ...a, isRead: true }
+          : a
+      )
+      if (newBalance >= sp.safetyStock && sp.stock < sp.safetyStock) {
+        get().addSparePartTransaction({
+          partId,
+          partName: sp.name,
+          type: 'alert_resolve',
+          quantity,
+          balanceAfter: newBalance,
+          operator,
+          remark: '库存恢复至安全线以上，预警解除',
+        })
+      }
+    }
+
+    persistState({
+      tasks: get().tasks,
+      samplingRecords: get().samplingRecords,
+      testResults: get().testResults,
+      disposalOrders: get().disposalOrders,
+      equipment: get().equipment,
+      maintenanceOrders: get().maintenanceOrders,
+      spareParts: newSpareParts,
+      sparePartTransactions: get().sparePartTransactions,
+      alerts: newAlerts,
+      samplingPoints: get().samplingPoints,
+      currentMonth: get().currentMonth,
+      alertIdSeq,
+      maintenanceIdSeq,
+      reviewHistoryIdSeq,
+      transactionIdSeq,
+    })
   },
 
   addAlert: (alert) => {
@@ -590,12 +910,14 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: get().equipment,
       maintenanceOrders: get().maintenanceOrders,
       spareParts: get().spareParts,
+      sparePartTransactions: get().sparePartTransactions,
       alerts: newAlerts,
       samplingPoints: get().samplingPoints,
       currentMonth: get().currentMonth,
       alertIdSeq,
       maintenanceIdSeq,
       reviewHistoryIdSeq,
+      transactionIdSeq,
     })
   },
 
@@ -657,12 +979,14 @@ export const useStore = create<AppState>((set, get) => ({
             equipment: get().equipment,
             maintenanceOrders: get().maintenanceOrders,
             spareParts: get().spareParts,
+            sparePartTransactions: get().sparePartTransactions,
             alerts: get().alerts,
             samplingPoints: get().samplingPoints,
             currentMonth: get().currentMonth,
             alertIdSeq,
             maintenanceIdSeq,
             reviewHistoryIdSeq,
+            transactionIdSeq,
           })
         }
       }
@@ -674,6 +998,7 @@ export const useStore = create<AppState>((set, get) => ({
     alertIdSeq = 100
     maintenanceIdSeq = 100
     reviewHistoryIdSeq = 1000
+    transactionIdSeq = 100
     set({
       tasks: enrichTasks(mockTasks),
       samplingRecords: mockSamplingRecords,
@@ -683,6 +1008,7 @@ export const useStore = create<AppState>((set, get) => ({
       equipment: mockEquipment,
       maintenanceOrders: mockMaintenanceOrders,
       spareParts: mockSpareParts,
+      sparePartTransactions: [],
       alerts: mockAlerts,
       samplingPoints: mockSamplingPoints,
       currentMonth: getDefaultMonth(),
